@@ -49,12 +49,13 @@ class ClickDetector:
 
         elapsed = time.monotonic() - self.press_time
 
-        if elapsed >= self.long_press_time and not self.moved:
+        if elapsed >= self.long_press_time and not self.moved or self.moved:
             self.hold_triggered = True
             self.sm.raise_flag(Flag.CLICK_HELD)
             print("HOLDIIING")
 
-    def release(self, pos: QPointF):
+
+    def release(self):
         if self.press_time is None:
             return
 
@@ -69,8 +70,8 @@ class ClickDetector:
             print("stopped holding")
             return
 
-        if self.moved:
-            return
+        # if self.moved:
+        #     return
 
         if duration <= self.click_time:
             self.sm.pulse(Pulse.CLICK)
@@ -83,7 +84,7 @@ class Mover:
         self.vel = Vec2()
         self.target = Vec2()
 
-        self.drag_offset = Vec2(pet.width() / 2, pet.width() / 6)
+        self.drag_offset = Vec2()
 
         self.acceleration = 1200.0
         self.max_speed = 700.0
@@ -216,22 +217,27 @@ class Mover:
     
     def begin_drag(self, mouse_pos: Vec2):
         self.active = True
+        self.movement_type = MovementType.DRAG
         self.vel = Vec2()
         pet.state_machine.pulse(Pulse.DRAGGING_STARTED)
+        self.pos = mouse_pos - self.drag_offset # initial snapping to cursor movement
 
     def update_drag_target(self, mouse_pos: Vec2):
         if self.movement_type == MovementType.DRAG:
-            self.pos = mouse_pos - self.drag_offset
-
             screen = QApplication.primaryScreen().availableGeometry()
-            if mouse_pos.x > screen.width() - pet.width()/2 or mouse_pos.x <= pet.width()/2 or mouse_pos.y >= screen.bottom() - pet.height():
+            if mouse_pos.x > screen.width() - pet.width()/2 or mouse_pos.x <= pet.width()/2 or mouse_pos.y >= screen.bottom() - (pet.height() / 2):
                 self.end_drag()
+                return
+            
+            self.pos = mouse_pos - self.drag_offset
+            
 
     def end_drag(self):
         if self.movement_type == MovementType.DRAG:
             self.active = False
             self.movement_type = None
             pet.state_machine.pulse(Pulse.DRAGGING_ENDED)
+            pet.click_detector.release()
 
 
 # ANIMATION STUFF
@@ -349,6 +355,7 @@ class Pet(QWidget): # main logic
         #instancing Animator, Mover
         self.animator = Animator()
         self.mover = Mover()
+        self.mover.drag_offset = Vec2(self.width() / 2 - 5, 0)
         
         screen = QApplication.primaryScreen() # Screen detection
         self.taskbar_top = screen.availableGeometry().bottom() # Taskbar position detection
@@ -388,7 +395,6 @@ class Pet(QWidget): # main logic
                 self.mover.set_position(self.x(), self.y())
                 self.mover.move_to(target_x, self.y(), MovementType.LERP)
             case BehaviourStates.DRAGGING:
-                self.mover.movement_type = MovementType.DRAG
                 pos = Vec2(self.click_detector.press_pos.x(), self.click_detector.press_pos.y())
                 self.mover.begin_drag(pos)
                 self.state_machine.pulse(Pulse.DRAGGING_STARTED)
@@ -421,19 +427,16 @@ class Pet(QWidget): # main logic
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self.click_detector.press(event.position())
-            if self.mover.movement_type == MovementType.DRAG:
-                print("mouse press event drag")
-                self.mover.begin_drag(self._mouse_vec(event))
+            self.click_detector.press(event.globalPosition())
 
 
     def mouseMoveEvent(self, event):
-        self.click_detector.move(event.position())
+        self.click_detector.move(event.globalPosition())
         if self.mover.movement_type == MovementType.DRAG:
             self.mover.update_drag_target(self._mouse_vec(event))
 
     def mouseReleaseEvent(self, event):
-        self.click_detector.release(event.position())
+        self.click_detector.release()
         if self.mover.movement_type == MovementType.DRAG:
             self.mover.end_drag()      
 

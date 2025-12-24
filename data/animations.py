@@ -33,4 +33,11 @@ ANIMATIONS = {
         }
     },
 
+    "held_by_the_nose": {
+        "folder": "animations/held_by_the_nose",
+        "fps": 12,
+        "loop": True,
+
+    },
+
 }

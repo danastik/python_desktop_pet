@@ -78,7 +78,8 @@ STATES = {
     },  
 
     "DRAGGING": {
-        "animation": "roll",
+        "animation": "held_by_the_nose",
+        "fps": 5,
         "behaviour": "DRAGGING",
         
         "exit_when": ["DRAGGING_ENDED"],
