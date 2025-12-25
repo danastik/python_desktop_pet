@@ -350,7 +350,6 @@ class Pet(QWidget): # main logic
         self.animator = Animator()
         self.variables = VariableManager(VARIABLES)
         self.mover = Mover()
-        self.mover.drag_offset = Vec2(self.width() / 2 - 5, 0)
         
         screen = QApplication.primaryScreen() # Screen detection
         self.taskbar_top = screen.availableGeometry().bottom() # Taskbar position detection
@@ -358,6 +357,7 @@ class Pet(QWidget): # main logic
 
         self.dpi_scale = self.devicePixelRatioF()
         self.pixel_ratio = RENDER_CONFIG["pixel_ratio"]
+        self.mover.drag_offset = Vec2(self.width() * RENDER_CONFIG["drag_offset_x"], self.height() * RENDER_CONFIG["drag_offset_x"])
         # self.update_window_size()
 
         self.state_machine = StateMachine(pet=self, configs=STATES, initial="IDLE") # set initial state
@@ -462,9 +462,14 @@ class Pet(QWidget): # main logic
 
         scale = self.pixel_ratio * self.dpi_scale
 
+        # bottom-middle anchor
+        anchor_x = frame.width() / 2
+        anchor_y = frame.height()
+
         p.save()
         p.scale(scale, scale)
-        p.drawPixmap(0, 0, frame)
+        p.translate(anchor_x, anchor_y)
+        p.drawPixmap(-anchor_x, -anchor_y, frame)
         p.restore()
 
 
