@@ -46,10 +46,10 @@ class StateRuntime:
     
     def _check_condition(self, cond):
         if "flag" in cond:
-            return cond["flag"] in self.flags
+            return Flag.__members__.get(cond["flag"]) in self.flags
 
         if "pulse" in cond:
-            return cond["pulse"] in self.pulses
+            return Pulse.__members__.get(cond["pulse"]) in self.pulses
 
         if "var" in cond:
             val = self.variables.get(cond["var"])

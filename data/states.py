@@ -11,27 +11,30 @@ STATES = {
 
         "transitions": [
             {
-                "when": [ {"flag": "CLICK_HELD"}, ],  
+                "when": [ {"flag":"CLICK_HELD"}, ],  
                 "to": "DRAGGING",
                 "chance": 1,
             },
             {
-                "when": [ {"pulse": "ANIMATION_END"}, ],
+                "when": [ {"pulse":"ANIMATION_END"}, ],
                 "to": "BLINK",
-                "chance": 0.08,
+                "chance": 0.1,
             },
             {
-                "when": [ {"pulse": "ANIMATION_END"}, ],
+                "when": [ {"pulse":"ANIMATION_END"}, ],
                 "to": "LOOKING_AROUND",
                 "chance": 0.02,
             },
             {
-                "when": [ {"pulse": "ANIMATION_END"}, ],
+                "when": [ 
+                    {"pulse":"ANIMATION_END"}, 
+                    {"var":"sitting_still_timer", "op":">", "value":50},
+                ],
                 "to": "ROLL",
-                "chance": 0.01,
+                "chance": 1,
             },
             {
-                "when": [ {"pulse": "CLICK"}, ],
+                "when": [ {"pulse":"CLICK"}, ],
                 "to": "ROLL",
             },
         ],
@@ -43,7 +46,7 @@ STATES = {
 
         "transitions": [
             {
-                "on": ["ANIMATION_END"],
+                "when": [ {"pulse":"ANIMATION_END"}, ],
                 "to": "IDLE"
             },
         ],
@@ -54,7 +57,7 @@ STATES = {
         "animation": "look_around",
         "transitions": [
             {
-                "on": ["CLICK"],
+                "when": [ {"pulse":"CLICK"}, ],
                 "to": "ROLL",
             },
         ],
@@ -68,7 +71,7 @@ STATES = {
         
         "transitions": [
             {
-                "on": ["MOVEMENT_FINISHED"],
+                "when": [{"flag":"MOVEMENT_FINISHED"},],
                 "to": "BLINK",
                 "chance": 0.1,
             },

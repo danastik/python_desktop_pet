@@ -1,9 +1,15 @@
 # variables.py
 
+#rate of 1 is one second
+
 VARIABLES = {
     "sleep_timer": {
         "value": 0.0,
-        "rate": 1.0        # per second
+        "rate": 1.0
+    },
+    "sitting_still_timer": {
+        "value": 0.0,
+        "rate": 1.0
     },
     "hunger": {
         "value": 5.0,

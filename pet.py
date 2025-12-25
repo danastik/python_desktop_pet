@@ -390,6 +390,8 @@ class Pet(QWidget): # main logic
 
         self.behaviour = BehaviourStates.__members__.get(cfg.get("behaviour", "STATIONARY"))
         # print(self.behaviour)
+        if self.behaviour != BehaviourStates.STATIONARY:
+            self.variables.set("sitting_still_timer", 0)
 
         match self.behaviour:
             case BehaviourStates.MOVING_RANDOM:
