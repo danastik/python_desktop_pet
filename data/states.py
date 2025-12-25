@@ -1,7 +1,22 @@
 # data/states
 # config, main data structure, dictates states, their animation, transitions between states
 # after "animation" can write overrides for "fps" or "loop"
-# tansitions is a list of dictionaries of lists. transitions[{"on": ["CLICK"]}, {"to": ["ROLL"]}]
+
+# tansitions is a list of dictionaries of lists.
+# "transitions": [
+#             {
+#                 "when": [ 
+#                       {"flag":"THIS_FLAG"}, 
+#                       {"var":"sitting_still_timer", "op":">", "value":10},
+#                 ],  
+#                 "to": "DRAGGING",
+#                 "chance": 1,
+#             },
+# BUT
+# "when": ["THIS_FLAG", "THAT_PULSE" ],  
+# ALSO WORKS
+# 
+#
 
 STATES = {
     "IDLE": {
@@ -16,9 +31,9 @@ STATES = {
                 "chance": 1,
             },
             {
-                "when": [ {"pulse":"ANIMATION_END"}, ],
+                "when": ["ANIMATION_END", ],
                 "to": "BLINK",
-                "chance": 0.1,
+                "chance": 0.06,
             },
             {
                 "when": [ {"pulse":"ANIMATION_END"}, ],
@@ -28,10 +43,10 @@ STATES = {
             {
                 "when": [ 
                     {"pulse":"ANIMATION_END"}, 
-                    {"var":"sitting_still_timer", "op":">", "value":50},
+                    {"var":"sitting_still_timer", "op":">", "value":100},
                 ],
                 "to": "ROLL",
-                "chance": 1,
+                "chance": 0.05,
             },
             {
                 "when": [ {"pulse":"CLICK"}, ],
@@ -68,6 +83,10 @@ STATES = {
     "ROLL": {
         "animation": "roll",
         "behaviour": "MOVING_RANDOM",
+
+        "on_enter": [
+            {"var": "sitting_still_timer", "op": "=", "value": 0},
+        ],
         
         "transitions": [
             {

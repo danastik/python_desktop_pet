@@ -26,6 +26,7 @@ class StateMachine:
         # print("state_machine next state is: ", next_state)
 
         if next_state:
+            self.state._apply_on_enter()  # signal to CurrentRuntime to apply changes in variables 
             self.change(next_state)
 
         self.state.clear_pulses()  # IMPORTANT
