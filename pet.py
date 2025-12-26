@@ -261,6 +261,15 @@ def load_frames(folder):  # function for loading frames, recieves a string path 
 
     return frames
 
+def scan_animation_bounds(frames):
+    max_w = 0
+    max_h = 0
+
+    for pix in frames:
+        max_w = max(max_w, pix.width())
+        max_h = max(max_h, pix.height())
+
+    return max_w, max_h
 
 class Animator:  # contains different animation functions
     def __init__(self):
@@ -341,7 +350,8 @@ class Pet(QWidget): # main logic
                 "frames": frames,
                 "fps": cfg["fps"],
                 "loop": cfg["loop"],
-                "holds": cfg.get("holds", {})
+                "holds": cfg.get("holds", {}),
+                "bounds": scan_animation_bounds(frames),
             }
 
                   
@@ -384,8 +394,12 @@ class Pet(QWidget): # main logic
         fps = cfg.get("fps", anim_cfg.get("fps", 6)) # safestate, will default to the latter
         loop = cfg.get("loop", anim_cfg.get("loop", True)) # safestate, will default to the latter
         holds = cfg.get("holds", anim_cfg.get("holds", {}))  # safestate, will default to empty directory
+        bounds_w, bounds_h = self.animations[anim_name]["bounds"]
 
         self.animator.set(frames=frames, fps=fps, loop=loop, holds=holds) #sets animation in animator
+
+        scale = self.pixel_ratio * self.dpi_scale
+        self.resize(int(bounds_w * scale), int(bounds_h * scale))
 
         self.behaviour = BehaviourStates.__members__.get(cfg.get("behaviour", "STATIONARY"))
         # print(self.behaviour)
@@ -429,6 +443,7 @@ class Pet(QWidget): # main logic
         self.update()
 
     def update_window_size(self):
+            return
             frame = self.animator.frame()
             if not frame:
                 return
@@ -475,8 +490,11 @@ class Pet(QWidget): # main logic
         scale = self.pixel_ratio * self.dpi_scale
 
         # draw sprite so its bottom-middle is at (self.x, self.y)
-        anchor_x = frame.width() * scale / 2
-        anchor_y = frame.height() * scale
+        anchor_x = self.width() / 2
+        anchor_y = self.height()
+
+        offset_x = frame.width() / 2
+        offset_y = frame.height()
 
         p.setPen(QPen(Qt.red, 6))
         p.drawLine(0, 0, self.width(), self.height())
@@ -488,8 +506,12 @@ class Pet(QWidget): # main logic
         p.setPen(QPen(Qt.green, 6))
         p.drawEllipse(QPointF(0, 0), 2, 2)
 
+        p.setPen(QPen(Qt.blue, 3))
+        p.drawLine(self.width(), 0, 0, self.height())
+        p.drawLine(offset_x, offset_y, anchor_x, anchor_y)
+
         p.scale(scale, scale)
-        p.drawPixmap(-anchor_x * 4, -anchor_y * 4, frame)
+        p.drawPixmap(-anchor_x -offset_x, -anchor_y - offset_y, frame)
 
         p.restore()
 
