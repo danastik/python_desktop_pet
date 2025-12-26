@@ -3,11 +3,13 @@
 
 import sys, os, random, time, math
 from PySide6.QtWidgets import QApplication, QWidget
-from PySide6.QtGui import QPainter, QPixmap
+from PySide6.QtGui import QPainter, QPixmap, QPen, QColor
 from PySide6.QtCore import Qt, QTimer, QPointF
 
 from data.states import STATES
 from data.animations import ANIMATIONS
+from data.render_config import RENDER_CONFIG
+
 from engine.state_machine import StateMachine
 from engine.enums import Flag, Pulse, BehaviourStates, MovementType
 from engine.vec2 import Vec2
@@ -227,7 +229,7 @@ class Mover:
     def update_drag_target(self, mouse_pos: Vec2):
         if self.movement_type == MovementType.DRAG:
             screen = QApplication.primaryScreen().availableGeometry()
-            if mouse_pos.x > screen.width() - pet.width()/2 or mouse_pos.x <= pet.width()/2 or mouse_pos.y >= screen.bottom() - (pet.height() / 2):
+            if mouse_pos.x > screen.width() - pet.hitbox_width/2 or mouse_pos.x <= pet.hitbox_width/2 or mouse_pos.y >= screen.bottom() - (pet.hitbox_height / 2):
                 self.end_drag()
                 return
             
@@ -246,32 +248,31 @@ class Mover:
 def load_frames(folder):  # function for loading frames, recieves a string path to a folder, returns a list of png files( converted to PixMap ) in name order
     frames = []
 
-    screen = QApplication.primaryScreen()
-    dpr = screen.devicePixelRatio()
+    
+    files = sorted(                # get the png files
+    f for f in os.listdir(folder)
+    if f.lower().endswith(".png")
+    )
 
-    for file in sorted(os.listdir(folder)):
-        files = sorted(                # get the png files
-        f for f in os.listdir(folder)
-        if f.lower().endswith(".png")
-        )
+    for i, filename in enumerate(files):
+        pix = QPixmap(os.path.join(folder, filename))
 
-        frames = []
-
-        for i, filename in enumerate(files):
-            pix = QPixmap(os.path.join(folder, filename)).scaled(
-                int(PET_SIZE_X * dpr), int(PET_SIZE_Y * dpr),      # scaled for DPI
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
-            )
-            pix.setDevicePixelRatio(dpr)  # helps with pixelisation
-
-            frames.append(pix)
+        frames.append(pix)
 
     return frames
 
+def scan_animation_bounds(frames):
+    max_w = 0
+    max_h = 0
+
+    for pix in frames:
+        max_w = max(max_w, pix.width())
+        max_h = max(max_h, pix.height())
+
+    return max_w, max_h
 
 class Animator:  # contains different animation functions
-    def __init__(self):
+    def __init__(self,):
         self.frames = []
         self.index = 0
         self.timer = 0
@@ -279,16 +280,17 @@ class Animator:  # contains different animation functions
         self.ticks_left = 0
         self.done = False
 
-    def set(self, frames, fps, loop, holds=None): #sets the animatios. receives a list of PixMap (frames), int (fps) and a bool(loop)
+    def set(self, frames, fps, loop, times_to_loop, holds=None): #sets the animatios. receives a list of PixMap (frames), int (fps) and a bool(loop)
         self.frames = frames
         self.fps = fps
         self.loop = loop
+        self.times_to_loop = times_to_loop
         self.index = 0
         self.timer = 0
         self.holds = holds or {}
         self.ticks_left = self.hold_for(0)
         self.done = False
-
+        
     def update(self, dt): #iterates over the list of frames with the speed of fps, loops if loop==True
         if self.done or not self.frames:
             return False
@@ -304,17 +306,18 @@ class Animator:  # contains different animation functions
                 self.index += 1
 
                 if self.index >= len(self.frames):
-                    if self.loop:
+                    if self.loop or self.times_to_loop >= 2 :
                         self.index = 0
+                        self.times_to_loop -= 1
                     else:
                         self.index = len(self.frames) - 1
+                        pet.state_machine.raise_flag(Flag.ANIMATION_FINISHED)
                         self.done = True
 
-                    return True # if the index of the frame is more than we have frames, the animation is considered finished(for ease of connecting animations together), else - not
+                    pet.state_machine.pulse(Pulse.ANIMATION_END)  # if the index of the frame is more than we have frames, the animation is considered finished(for ease of connecting animations together), else - not
 
                 self.ticks_left = self.hold_for(self.index)
 
-            else: return False
 
     def hold_for(self, index):
         return self.holds.get(index + 1, 1)
@@ -329,19 +332,17 @@ class Pet(QWidget): # main logic
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)   # QT stuff idk idc
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.resize(PET_SIZE_X, PET_SIZE_Y) 
 
         # get all animations in a dictionary
-
         self.animations = {}
         base = os.path.dirname(os.path.abspath(__file__))
-        for name, cfg in ANIMATIONS.items():
+        for name in list(ANIMATIONS):
+            cfg = ANIMATIONS[name]
             folder = os.path.join(base, cfg["folder"])
 
             frames = []
-            
+
             frames = load_frames(folder)
-            print("loaded animation: ", name)
 
             if not frames:
                 raise RuntimeError(f"No frames found for animation '{name}'")
@@ -350,23 +351,35 @@ class Pet(QWidget): # main logic
                 "frames": frames,
                 "fps": cfg["fps"],
                 "loop": cfg["loop"],
-                "holds": cfg.get("holds", {})
+                "holds": cfg.get("holds", {}),
+                "bounds": scan_animation_bounds(frames),
+                "times_to_loop": cfg.get("times_to_loop", 1)
             }
+            print(f"[ANIM LOAD] {name}: {len(frames)} frames")
 
                   
-        #instancing Animator, Mover
-        self.animator = Animator()
         self.variables = VariableManager(VARIABLES)
-        self.mover = Mover()
-        self.mover.drag_offset = Vec2(self.width() / 2 - 5, 0)
+        self.animator = Animator()
+
+        self.hitbox_width = 0
+        self.hitbox_height = 0
         
+        self.mover = Mover()
+        self.anchor_x = 500
+        self.anchor_y = 500
         screen = QApplication.primaryScreen() # Screen detection
         self.taskbar_top = screen.availableGeometry().bottom() # Taskbar position detection
-        self.mover.set_position(self.x(), self.taskbar_top - self.height() + 1) # set initial position
+        self.mover.set_position(100, self.taskbar_top + 1) # set initial position
+
+        self.dpi_scale = self.devicePixelRatioF()
+        self.pixel_ratio = RENDER_CONFIG["pixel_ratio"]
 
         self.state_machine = StateMachine(pet=self, configs=STATES, initial="IDLE") # set initial state
 
         self.click_detector = ClickDetector(state_machine=self.state_machine) #initialising ClickDetector
+
+        self.update_hitbox_size_and_drag_offset() # initial hitbox update
+
 
         # Timer for updating logic
         self.timer = QTimer()
@@ -384,9 +397,14 @@ class Pet(QWidget): # main logic
         frames = self.animations[anim_name]["frames"]
         fps = cfg.get("fps", anim_cfg.get("fps", 6)) # safestate, will default to the latter
         loop = cfg.get("loop", anim_cfg.get("loop", True)) # safestate, will default to the latter
+        times_to_loop = cfg.get("times_to_loop", anim_cfg.get("times_to_loop", 1))
         holds = cfg.get("holds", anim_cfg.get("holds", {}))  # safestate, will default to empty directory
+        bounds_w, bounds_h = self.animations[anim_name]["bounds"]
 
-        self.animator.set(frames=frames, fps=fps, loop=loop, holds=holds) #sets animation in animator
+        self.animator.set(frames=frames, fps=fps, loop=loop, times_to_loop=times_to_loop, holds=holds) #sets animation in animator
+
+        scale = self.pixel_ratio * self.dpi_scale
+        self.resize_keep_anchor(int(bounds_w * scale), int(bounds_h * scale))
 
         self.behaviour = BehaviourStates.__members__.get(cfg.get("behaviour", "STATIONARY"))
         # print(self.behaviour)
@@ -394,40 +412,78 @@ class Pet(QWidget): # main logic
         match self.behaviour:
             case BehaviourStates.MOVING_RANDOM:
                 screen = QApplication.primaryScreen().geometry()
-                target_x = random.randint(0, screen.width() - self.width())
-                self.mover.set_position(self.x(), self.y())
-                self.mover.move_to(target_x, self.y(), MovementType.LERP)
+                target_x = random.randint(0, screen.width() - round(self.hitbox_width))
+                self.mover.set_position(self.anchor_x, self.anchor_y)
+                self.mover.move_to(target_x, self.anchor_y, MovementType.LERP)
             case BehaviourStates.DRAGGING:
                 pos = Vec2(self.click_detector.press_pos.x(), self.click_detector.press_pos.y())
                 self.mover.begin_drag(pos)
                 self.state_machine.pulse(Pulse.DRAGGING_STARTED)
             case BehaviourStates.FALLING:
-                self.mover.move_to(self.x(), self.taskbar_top - self.height() + 1, MovementType.ACCELERATING)
+                self.mover.move_to(self.anchor_x, self.taskbar_top + 1, MovementType.ACCELERATING)
             
-    def _mouse_vec(self, event):   #helper function for converting Qt points to Vec2
-        p = event.globalPosition()
-        return Vec2(p.x(), p.y())
-
     def on_state_exit(self, state): #just does nothing when the state is done
         pass
 
+    def _mouse_vec(self, event):   #helper function for converting Qt points to Vec2
+        p = event.globalPosition()
+        return Vec2(p.x(), p.y())
+    
     def update_logic(self):
         dt = 1 / 60
 
         arrived = self.mover.update(dt)
-        self.move(int(self.mover.pos.x), int(self.mover.pos.y))
-
         if arrived:
             self.state_machine.raise_flag(Flag.MOVEMENT_FINISHED)
 
-        if self.animator.update(dt):
-            self.state_machine.pulse(Pulse.ANIMATION_END)
-        
+        # copy anchor from mover (single source of truth)
+        self.anchor_x = self.mover.pos.x
+        self.anchor_y = self.mover.pos.y
 
+        # derive window position
+        self.move(
+            int(self.anchor_x - self.width() / 2),
+            int(self.anchor_y - self.height())
+        )
+  
+        self.animator.update(dt)
         self.variables.update(dt)
         self.state_machine.update()
         self.click_detector.update()
         self.update()
+
+    def resize_keep_anchor(self, new_w, new_h):
+        old_pos = self.pos()
+        old_w = self.width()
+        old_h = self.height()
+
+        # world-space anchor (bottom-middle)
+        self.anchor_x = old_pos.x() + old_w // 2
+        self.anchor_y = old_pos.y() + old_h
+
+        # move window so anchor stays fixed
+        self.move(
+            self.anchor_x - new_w // 2,
+            self.anchor_y - new_h
+        )
+
+        # resize
+        self.resize(new_w, new_h)
+
+    def update_hitbox_size_and_drag_offset(self):
+            frame = self.animator.frame()
+            if not frame:
+                return
+            
+            scale = self.pixel_ratio * self.devicePixelRatioF()
+            
+            self.hitbox_width = frame.width() * scale
+            self.hitbox_height = frame.height() * scale
+
+            # print(self.hitbox_height)
+            # print(self.hitbox_width)
+
+            self.mover.drag_offset = Vec2(self.hitbox_width * RENDER_CONFIG["drag_offset_x"], self.hitbox_height * RENDER_CONFIG["drag_offset_y"])
 
 
     def mousePressEvent(self, event):
@@ -445,14 +501,50 @@ class Pet(QWidget): # main logic
         if self.mover.movement_type == MovementType.DRAG:
             self.mover.end_drag()      
 
+
     def paintEvent(self, e): #draws the frame reveived from Animator 
         p = QPainter(self)
-        p.drawPixmap(0, 0, self.animator.frame())
+        p.setRenderHint(QPainter.SmoothPixmapTransform, True)
+
+        # p.fillRect(self.rect(), QColor(80, 80, 80))  # dark gray
+
+        frame = self.animator.frame()
+        if not frame:
+            return
+
+        scale = self.pixel_ratio * self.dpi_scale
+
+        # draw sprite so its bottom-middle is at (self.x, self.y)
+        anchor_x = self.width() / 2
+        anchor_y = self.height()
+
+        offset_x = frame.width() / 2
+        offset_y = frame.height()
+
+        p.save()
+        p.translate(anchor_x, anchor_y)
+
+        #draws pets hitbox, pretty neat
+        p.setPen(QPen(Qt.red, 3))
+        p.drawRect(-self.hitbox_width/2, -self.hitbox_height, self.hitbox_width, self.hitbox_height)
+        
+
+        p.setPen(QPen(Qt.green, 6))
+        p.drawEllipse(QPointF(0, 0), 2, 2)
+
+        p.setPen(QPen(Qt.blue, 3))
+        p.drawLine(self.width(), 0, 0, self.height())
+        p.drawLine(offset_x, offset_y, anchor_x, anchor_y)
+
+        p.scale(scale, scale)
+        p.drawPixmap(-offset_x, -offset_y, frame)
+
+        p.restore()
 
 
 if __name__ == "__main__": # QT stuff, idk idc
     app = QApplication(sys.argv)
     pet = Pet()
-    pet.move(300, 900)
+    # pet.move(300, 900)
     pet.show()
     sys.exit(app.exec())

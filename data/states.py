@@ -49,6 +49,13 @@ STATES = {
                 "chance": 0.05,
             },
             {
+                "when": [ 
+                    {"pulse":"CLICK"}, 
+                    {"var":"worrying_meter", "op":">", "value":50}    
+                    ],
+                "to": "VERY_WORRIED",
+            },
+            {
                 "when": [ {"pulse":"CLICK"}, ],
                 "to": "ROLL",
             },
@@ -115,4 +122,18 @@ STATES = {
         "exit_when": ["MOVEMENT_FINISHED"],
         "exit_to": "IDLE"
     },    
+
+    "VERY_WORRIED": {
+        "animation": "grow",
+        "behaviour": "STATIONARY",
+        "on_enter": [
+            {"var": "worrying_meter", "op": "=", "value": 0},
+        ],
+        "transitions":[
+            {
+                "when": ["ANIMATION_FINISHED",],
+                "to": "IDLE",
+            }
+        ],
+    }, 
 }
