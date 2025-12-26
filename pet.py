@@ -3,7 +3,7 @@
 
 import sys, os, random, time, math
 from PySide6.QtWidgets import QApplication, QWidget
-from PySide6.QtGui import QPainter, QPixmap
+from PySide6.QtGui import QPainter, QPixmap, QPen, QColor
 from PySide6.QtCore import Qt, QTimer, QPointF
 
 from data.states import STATES
@@ -229,7 +229,7 @@ class Mover:
     def update_drag_target(self, mouse_pos: Vec2):
         if self.movement_type == MovementType.DRAG:
             screen = QApplication.primaryScreen().availableGeometry()
-            if mouse_pos.x > screen.width() - pet.width()/2 or mouse_pos.x <= pet.width()/2 or mouse_pos.y >= screen.bottom() - (pet.height() / 2):
+            if mouse_pos.x > screen.width() - pet.logical_width/2 or mouse_pos.x <= pet.logical_width/2 or mouse_pos.y >= screen.bottom() - (pet.logical_height / 2):
                 self.end_drag()
                 return
             
@@ -324,7 +324,6 @@ class Pet(QWidget): # main logic
         # resize window to match FIRST frame (scaled)
 
         # get all animations in a dictionary
-
         self.animations = {}
         base = os.path.dirname(os.path.abspath(__file__))
         for name, cfg in ANIMATIONS.items():
@@ -350,19 +349,23 @@ class Pet(QWidget): # main logic
         self.animator = Animator()
         self.variables = VariableManager(VARIABLES)
         self.mover = Mover()
+
+        self.logical_width = 0
+        self.logical_height = 0
         
         screen = QApplication.primaryScreen() # Screen detection
         self.taskbar_top = screen.availableGeometry().bottom() # Taskbar position detection
-        self.mover.set_position(self.x(), self.taskbar_top - self.height() + 1) # set initial position
+        self.mover.set_position(100, 100 + 1) # set initial position
 
         self.dpi_scale = self.devicePixelRatioF()
         self.pixel_ratio = RENDER_CONFIG["pixel_ratio"]
-        self.mover.drag_offset = Vec2(self.width() * RENDER_CONFIG["drag_offset_x"], self.height() * RENDER_CONFIG["drag_offset_x"])
-        # self.update_window_size()
+        self.mover.drag_offset = Vec2(self.logical_width * RENDER_CONFIG["drag_offset_x"], self.logical_height * RENDER_CONFIG["drag_offset_x"])
 
         self.state_machine = StateMachine(pet=self, configs=STATES, initial="IDLE") # set initial state
 
         self.click_detector = ClickDetector(state_machine=self.state_machine) #initialising ClickDetector
+
+        self.update_window_size() # initial update window size
 
         # Timer for updating logic
         self.timer = QTimer()
@@ -390,7 +393,7 @@ class Pet(QWidget): # main logic
         match self.behaviour:
             case BehaviourStates.MOVING_RANDOM:
                 screen = QApplication.primaryScreen().geometry()
-                target_x = random.randint(0, screen.width() - self.width())
+                target_x = random.randint(0, screen.width() - round(self.logical_width))
                 self.mover.set_position(self.x(), self.y())
                 self.mover.move_to(target_x, self.y(), MovementType.LERP)
             case BehaviourStates.DRAGGING:
@@ -398,7 +401,7 @@ class Pet(QWidget): # main logic
                 self.mover.begin_drag(pos)
                 self.state_machine.pulse(Pulse.DRAGGING_STARTED)
             case BehaviourStates.FALLING:
-                self.mover.move_to(self.x(), self.taskbar_top - self.height() + 1, MovementType.ACCELERATING)
+                self.mover.move_to(self.x(), self.taskbar_top + 1, MovementType.ACCELERATING)
             
     def on_state_exit(self, state): #just does nothing when the state is done
         pass
@@ -429,8 +432,15 @@ class Pet(QWidget): # main logic
             frame = self.animator.frame()
             if not frame:
                 return
+            
+            scale = self.pixel_ratio * self.devicePixelRatioF()
+            
+            self.logical_width = frame.width() * scale
+            self.logical_height = frame.height() * scale
 
-            scale = self.pixel_ratio * self.pixel_ratio()
+            # print(self.logical_height)
+            # print(self.logical_width)
+
             w = int(frame.width() * scale)
             h = int(frame.height() * scale)
             self.resize(w, h)
@@ -456,20 +466,31 @@ class Pet(QWidget): # main logic
         p = QPainter(self)
         p.setRenderHint(QPainter.SmoothPixmapTransform, True)
 
+        p.fillRect(self.rect(), QColor(80, 80, 80))  # dark gray
+
         frame = self.animator.frame()
         if not frame:
             return
 
         scale = self.pixel_ratio * self.dpi_scale
 
-        # bottom-middle anchor
-        anchor_x = frame.width() / 2
-        anchor_y = frame.height()
+        # draw sprite so its bottom-middle is at (self.x, self.y)
+        anchor_x = self.width() / 2
+        anchor_y = self.height()
 
+        p.setPen(QPen(Qt.red, 6))
+        p.drawLine(0, 0, self.width(), self.height())
+        p.drawLine(self.width(), 0, 0, self.height())
+        
         p.save()
-        p.scale(scale, scale)
         p.translate(anchor_x, anchor_y)
-        p.drawPixmap(-anchor_x, -anchor_y, frame)
+
+        p.setPen(QPen(Qt.green, 6))
+        p.drawEllipse(QPointF(0, 0), 2, 2)
+
+        p.scale(scale, scale)
+        p.drawPixmap(-anchor_x * 4, -anchor_y * 4, frame)
+
         p.restore()
 
 
