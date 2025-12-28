@@ -525,16 +525,16 @@ class Pet(QWidget): # main logic
         p.translate(anchor_x, anchor_y)
 
         #draws pets hitbox, pretty neat
-        p.setPen(QPen(Qt.red, 3))
-        p.drawRect(-self.hitbox_width/2, -self.hitbox_height, self.hitbox_width, self.hitbox_height)
+        # p.setPen(QPen(Qt.red, 3))
+        # p.drawRect(-self.hitbox_width/2, -self.hitbox_height, self.hitbox_width, self.hitbox_height)
         
 
-        p.setPen(QPen(Qt.green, 6))
-        p.drawEllipse(QPointF(0, 0), 2, 2)
+        # p.setPen(QPen(Qt.green, 6))
+        # p.drawEllipse(QPointF(0, 0), 2, 2)
 
-        p.setPen(QPen(Qt.blue, 3))
-        p.drawLine(self.width(), 0, 0, self.height())
-        p.drawLine(offset_x, offset_y, anchor_x, anchor_y)
+        # p.setPen(QPen(Qt.blue, 3))
+        # p.drawLine(self.width(), 0, 0, self.height())
+        # p.drawLine(offset_x, offset_y, anchor_x, anchor_y)
 
         p.scale(scale, scale)
         p.drawPixmap(-offset_x, -offset_y, frame)
