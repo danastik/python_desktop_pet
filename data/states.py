@@ -126,6 +126,7 @@ STATES = {
 
     "VERY_WORRIED": {
         "animation": "grow",
+        "times_to_loop": 5,
         "behaviour": "STATIONARY",
         "on_enter": [
             {"var": "worrying_meter", "op": "=", "value": 0},
